@@ -1,0 +1,9 @@
+"coefficient","value"
+"Netherlands_(Intercept)",0.000837018590632499
+"Netherlands_b_diff_lag_Netherlands",0.0132624705024671
+"France_(Intercept)",-0.00676056085741846
+"France_b_diff_lag_France",0.0132624705024671
+"Spain_(Intercept)",0.00194049231791397
+"Spain_b_diff_lag_Spain",0.0132624705024671
+"Italy_(Intercept)",-0.0014010472453414
+"Italy_b_diff_lag_Italy",0.0132624705024671

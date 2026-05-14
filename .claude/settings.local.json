@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/sanjayprakashsrivastava/Economics -type f -name \"*.R\" 2>/dev/null)",
+      "Read(//Users/sanjayprakashsrivastava/Economics/**)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('macro_simulations.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
+    ]
+  }
+}
