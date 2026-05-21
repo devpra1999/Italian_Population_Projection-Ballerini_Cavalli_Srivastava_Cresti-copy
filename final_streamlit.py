@@ -2330,6 +2330,9 @@ def main() -> None:
                 _end_year_macro = st.slider(
                     "Projection end year", 2030, 2075, 2050, 5, key="macro_end_year"
                 )
+                _start_year_macro = st.slider(
+                    "Historical data starts from ", 1970, 2024, 2010, 5, key="macro_start_year"
+                )
 
             if st.button("Run Macroeconomic Simulations"):
                 with st.spinner("Running 6-country simulation (~10–30 s)…"):
@@ -2372,7 +2375,7 @@ def main() -> None:
                 for _var, _label in VAR_LABELS.items():
                     st.subheader(_label)
                     _fig = plot_macro_italy(
-                        _mr, _dp, _var, end_year=st.session_state.get("macro_end_year", 2050)
+                        _mr, _dp, _var, start_year=st.session_state.get("macro_start_year", 2010), end_year=st.session_state.get("macro_end_year", 2050)
                     )
                     st.pyplot(_fig, clear_figure=True)
 

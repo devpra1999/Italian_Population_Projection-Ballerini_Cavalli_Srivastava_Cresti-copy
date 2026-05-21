@@ -484,13 +484,14 @@ def plot_macro_italy(
     results_by_scenario: Dict[str, Dict[str, pd.DataFrame]],
     df_proj: pd.DataFrame,
     variable: str,
-    start_year: int = 1970,
+    start_year: int = 2010,
     end_year: int = 2050,
 ) -> plt.Figure:
     """
     Plot historical + projected values of `variable` for Italy.
     Each demographic scenario gets its own coloured line + 90% CI ribbon.
     """
+
     fig, ax = plt.subplots(figsize=LARGE_FIGSIZE)
 
     scenarios = list(results_by_scenario.keys())
@@ -509,75 +510,158 @@ def plot_macro_italy(
         "s_non_social": "s_non_social_Italy",
         "snowball":     "snowball_effect_Italy",
     }
+
     hist_col = hist_col_map.get(variable)
 
+    # Historical data
+    hist = None
     if hist_col and hist_col in df_proj.columns:
-        hist = df_proj[(df_proj["Year"] >= start_year) & (df_proj["Year"] <= 2024)]
-        ax.plot(hist["Year"].values, hist[hist_col].values,
-                color="black", linewidth=1.8, linestyle="-", zorder=5,
-                label="Historical (Italy)")
+        hist = df_proj[
+            (df_proj["Year"] >= start_year) &
+            (df_proj["Year"] <= 2024)
+        ]
 
-    _ylim_map = {
-        "dy":           (-0.10,  0.10),
-        "g":            (-0.10,  0.10),
-        "pi":           ( 0.00,  0.10),
-        "ir":           ( 0.00,  0.20),
-        "b":            ( 0.00, 10.00),
-        "s":            (-0.40,  0.10),
-        "s_social":     (-0.30,  0.00),
-        "s_non_social": (-0.20,  0.20),
-        "ygap":         (-0.10,  0.10),
-    }
-    ymin, ymax = _ylim_map.get(variable, (-1e6, 1e6))
+        ax.plot(
+            hist["Year"].values,
+            hist[hist_col].values,
+            color="black",
+            linewidth=1.8,
+            linestyle="-",
+            zorder=5,
+            label="Historical (Italy)",
+        )
 
-    # 2024 anchor: the last historical point, used to connect history → projection
+    # 2024 anchor value to connect historical → projection
     anchor_val = np.nan
     if hist_col and hist_col in df_proj.columns:
-        _anchor_row = df_proj[df_proj["Year"] == 2024]
-        if len(_anchor_row) > 0:
-            anchor_val = float(_anchor_row[hist_col].iloc[0])
+        anchor_row = df_proj[df_proj["Year"] == 2024]
+        if len(anchor_row) > 0:
+            anchor_val = float(anchor_row[hist_col].iloc[0])
 
+    # Prepare projection slices
     proj_slices = {}
+
     for scenario in scenarios:
         proj = results_by_scenario[scenario][variable]
-        proj = proj[(proj["year"] >= 2025) & (proj["year"] <= end_year)]
-        # Prepend 2024 anchor row so the projection line starts at the historical value
+
+        proj = proj[
+            (proj["year"] >= 2025) &
+            (proj["year"] <= end_year)
+        ]
+
+        # prepend historical anchor
         if np.isfinite(anchor_val):
-            anchor_row = pd.DataFrame({
-                "year": [2024], "mean": [anchor_val],
-                "lower": [anchor_val], "upper": [anchor_val],
+            anchor_df = pd.DataFrame({
+                "year":  [2024],
+                "mean":  [anchor_val],
+                "lower": [anchor_val],
+                "upper": [anchor_val],
             })
-            proj = pd.concat([anchor_row, proj], ignore_index=True)
+
+            proj = pd.concat([anchor_df, proj], ignore_index=True)
+
         proj_slices[scenario] = proj
 
-    for scenario, color in zip(scenarios, colors):
-        proj = proj_slices[scenario]
-        label = scenario.replace("_", " ").title()
-        ax.plot(proj["year"].values,
-                np.clip(proj["mean"].values, ymin, ymax),
-                color=color, linewidth=1.6, label=label)
-        lo = np.clip(proj["lower"].values, ymin, ymax)
-        hi = np.clip(proj["upper"].values, ymin, ymax)
-        ax.fill_between(proj["year"].values, lo, hi, color=color, alpha=0.13)
+    # Dynamically determine y-axis limits
+    y_values = []
 
-    ax.axvline(x=2024, color="black", linestyle="--", linewidth=0.9, zorder=4)
+    # historical values
+    if hist is not None:
+        y_values.extend(hist[hist_col].dropna().values)
+
+    # projected intervals
+    for scenario in scenarios:
+        proj = proj_slices[scenario]
+
+        y_values.extend(proj["lower"].dropna().values)
+        y_values.extend(proj["upper"].dropna().values)
+
+    ymin = np.min(y_values)
+    ymax = np.max(y_values)
+
+    # padding
+    padding = 0.05 * (ymax - ymin) if ymax > ymin else 0.01
+    ymin -= padding
+    ymax += padding
+
+    # Plot projections
+    for scenario, color in zip(scenarios, colors):
+
+        proj = proj_slices[scenario]
+
+        label = scenario.replace("_", " ").title()
+
+        ax.plot(
+            proj["year"].values,
+            proj["mean"].values,
+            color=color,
+            linewidth=1.6,
+            label=label,
+        )
+
+        ax.fill_between(
+            proj["year"].values,
+            proj["lower"].values,
+            proj["upper"].values,
+            color=color,
+            alpha=0.13,
+        )
+
+    # Historical/projected separator
+    ax.axvline(
+        x=2024,
+        color="black",
+        linestyle="--",
+        linewidth=0.9,
+        zorder=4,
+    )
 
     ax.set_ylim(ymin, ymax)
 
-    ylims = ax.get_ylim()
-    y_top = ylims[1]
-    mid_hist = max(start_year, 2010) + (2024 - max(start_year, 2010)) / 2
+    # Labels for historical/projected periods
+    y_top = ymax
+
+    mid_hist = max(start_year, 2010) + (
+        2024 - max(start_year, 2010)
+    ) / 2
+
     mid_proj = 2024 + (end_year - 2024) / 2
-    ax.text(mid_hist, y_top, "Historical", ha="center", va="top", fontsize=9, color="gray")
-    ax.text(mid_proj, y_top, "Projected",  ha="center", va="top", fontsize=9, color="gray")
+
+    ax.text(
+        mid_hist,
+        y_top,
+        "Historical",
+        ha="center",
+        va="top",
+        fontsize=9,
+        color="gray",
+    )
+
+    ax.text(
+        mid_proj,
+        y_top,
+        "Projected",
+        ha="center",
+        va="top",
+        fontsize=9,
+        color="gray",
+    )
 
     ylabel = VAR_LABELS.get(variable, variable)
+
     ax.set_xlabel("Year", fontsize=11)
     ax.set_ylabel(ylabel, fontsize=11)
+
     ax.set_title(f"Italy — {ylabel}", fontsize=12)
+
     ax.legend(fontsize=9, loc="best")
+
     ax.grid(True, alpha=0.3)
+
     ax.set_xlim(start_year, end_year)
+
     ax.tick_params(axis="x", rotation=45)
+
     fig.tight_layout()
+
     return fig
