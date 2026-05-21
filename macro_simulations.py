@@ -577,13 +577,17 @@ def plot_macro_italy(
         y_values.extend(proj["lower"].dropna().values)
         y_values.extend(proj["upper"].dropna().values)
 
-    ymin = np.min(y_values)
-    ymax = np.max(y_values)
-
-    # padding
-    padding = 0.05 * (ymax - ymin) if ymax > ymin else 0.01
-    ymin -= padding
-    ymax += padding
+    # Keep only finite values so that inf/nan from explosive paths don't
+    # corrupt the padding arithmetic or the max/min comparisons below.
+    finite_y = [float(v) for v in y_values if np.isfinite(v)]
+    if finite_y:
+        ymin = min(finite_y)
+        ymax = max(finite_y)
+        padding = 0.05 * (ymax - ymin) if ymax > ymin else 0.01
+        ymin -= padding
+        ymax += padding
+    else:
+        ymin, ymax = -0.1, 0.1
 
     # hard bounds: clamp auto limits if they exceed the allowed range
     _hard_bounds = {
@@ -602,6 +606,8 @@ def plot_macro_italy(
         _lo, _hi = _hard_bounds[variable]
         ymin = max(ymin, _lo)
         ymax = min(ymax, _hi)
+        if ymin >= ymax:  # degenerate case: fall back to the full hard range
+            ymin, ymax = _lo, _hi
 
     # Plot projections
     for scenario, color in zip(scenarios, colors):
@@ -634,8 +640,6 @@ def plot_macro_italy(
         linewidth=0.9,
         zorder=4,
     )
-
-    ax.set_ylim(ymin, ymax)
 
     # Labels for historical/projected periods
     y_top = ymax
@@ -678,6 +682,7 @@ def plot_macro_italy(
     ax.grid(True, alpha=0.3)
 
     ax.set_xlim(start_year, end_year)
+    ax.set_ylim(ymin, ymax)  # set after legend so loc="best" can't override it
 
     ax.tick_params(axis="x", rotation=45)
 
