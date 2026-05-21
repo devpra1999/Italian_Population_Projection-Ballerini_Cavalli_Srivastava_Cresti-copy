@@ -2321,17 +2321,16 @@ def main() -> None:
                 "Place **estimations.RData** in the input folder and ensure **pyreadr** is installed."
             )
         else:
+            _MACRO_N_SIM = 300
+
             _macro_col1, _macro_col2 = st.columns(2)
             with _macro_col1:
-                _num_sim_macro = st.slider(
-                    "Monte Carlo paths", 100, 1000, 300, 100, key="macro_num_sim"
-                )
-            with _macro_col2:
                 _end_year_macro = st.slider(
                     "Projection end year", 2030, 2075, 2050, 5, key="macro_end_year"
                 )
+            with _macro_col2:
                 _start_year_macro = st.slider(
-                    "Historical data starts from ", 1970, 2024, 2010, 5, key="macro_start_year"
+                    "Historical data starts from", 1970, 2024, 2010, 5, key="macro_start_year"
                 )
 
             if st.button("Run Macroeconomic Simulations"):
@@ -2344,7 +2343,7 @@ def main() -> None:
                             _df_proj_macro,
                             _italy_demo,
                             _model_data,
-                            num_sim=_num_sim_macro,
+                            num_sim=_MACRO_N_SIM,
                         )
                         st.session_state["macro_results"] = _macro_results
                         st.session_state["macro_df_proj"] = _df_proj_macro
@@ -2375,7 +2374,9 @@ def main() -> None:
                 for _var, _label in VAR_LABELS.items():
                     st.subheader(_label)
                     _fig = plot_macro_italy(
-                        _mr, _dp, _var, start_year=st.session_state.get("macro_start_year", 2010), end_year=st.session_state.get("macro_end_year", 2050)
+                        _mr, _dp, _var,
+                        start_year=_start_year_macro,
+                        end_year=_end_year_macro,
                     )
                     st.pyplot(_fig, clear_figure=True)
 

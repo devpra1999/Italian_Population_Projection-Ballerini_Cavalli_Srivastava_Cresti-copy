@@ -40,6 +40,7 @@ VAR_LABELS = {
     "s_social":     "Social Surplus (% GDP)",
     "s_non_social": "Non-Social Surplus (% GDP)",
     "ygap":         "Output Gap",
+    "snowball":     "Snowball Effect",
 }
 
 
@@ -583,6 +584,24 @@ def plot_macro_italy(
     padding = 0.05 * (ymax - ymin) if ymax > ymin else 0.01
     ymin -= padding
     ymax += padding
+
+    # hard bounds: clamp auto limits if they exceed the allowed range
+    _hard_bounds = {
+        "dy":           (-0.10,  0.10),
+        "g":            (-0.15,  0.25),
+        "pi":           ( 0.00,  0.20),
+        "ir":           ( 0.00,  0.20),
+        "b":            ( 0.00, 10.00),
+        "s":            (-0.40,  0.10),
+        "s_social":     (-0.30,  0.10),
+        "s_non_social": (-0.20,  0.20),
+        "ygap":         (-0.12,  0.12),
+        "snowball":     (-0.40,  0.60),
+    }
+    if variable in _hard_bounds:
+        _lo, _hi = _hard_bounds[variable]
+        ymin = max(ymin, _lo)
+        ymax = min(ymax, _hi)
 
     # Plot projections
     for scenario, color in zip(scenarios, colors):
