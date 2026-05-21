@@ -2302,7 +2302,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown(
-        "<h2 style='margin-bottom:0px'>Macroeconomic Projections for Italy</h2><span style='font-size:12px;color:gray'> v2</span>",
+        "<h2 style='margin-bottom:0px'>Macroeconomic Projections for Italy</h2>",
         unsafe_allow_html=True,
     )
     st.markdown(
