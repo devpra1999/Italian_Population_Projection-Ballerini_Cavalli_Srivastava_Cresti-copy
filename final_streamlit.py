@@ -2327,11 +2327,11 @@ def main() -> None:
             _macro_col1, _macro_col2 = st.columns(2)
             with _macro_col1:
                 _end_year_macro = st.slider(
-                    "Projection end year", 2030, 2075, 2050, 5, key="macro_end_year"
+                    "Projection end year", 2030, 2075, 2070, 5, key="macro_end_year"
                 )
             with _macro_col2:
                 _start_year_macro = st.slider(
-                    "Historical data starts from", 1970, 2024, 2010, 5, key="macro_start_year"
+                    "Historical data starts from", 1970, 2024, 2000, 5, key="macro_start_year"
                 )
 
             # ------------------------------------------------------------------
