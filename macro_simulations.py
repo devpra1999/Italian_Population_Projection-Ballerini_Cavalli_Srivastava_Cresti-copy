@@ -24,6 +24,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from typing import Optional
 
 COUNTRY_ORDER = ["US", "Germany", "France", "Italy", "Netherlands", "Spain"]
 PERIPHERAL    = ["France", "Italy", "Netherlands", "Spain"]
@@ -152,12 +153,26 @@ def load_model_data(rdata_path: str) -> Dict[str, object]:
 # Demographic ratio computation from population projection
 # ---------------------------------------------------------------------------
 
+def _get_retirement_age(year: int, schedule: Optional[Dict[int, int]]) -> int:
+    """Return the effective retirement age for `year` given a step-wise reform schedule."""
+    if not schedule:
+        return 65
+    past = {y: a for y, a in schedule.items() if y <= year}
+    return past[max(past)] if past else 65
+
+
 def compute_demo_ratios_from_projection(
     population_by_age_mean: pd.DataFrame,
+    retirement_schedule: Optional[Dict[int, int]] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
     From population_by_age_mean (output of the demographic projection),
     compute the macro-relevant demographic variables for Italy per scenario.
+
+    retirement_schedule: optional {year: retirement_age} dict for step-wise
+        retirement age reforms. E.g. {2026: 67, 2030: 70, 2035: 72} means the
+        retirement age rises to 67 from 2026, 70 from 2030, and 72 from 2035.
+        Before the first reform year the baseline age of 65 is used.
 
     Returns {scenario_label: DataFrame(year, N_Y, N_M1, N_M2, N_R, N,
                                        MY, YM, D, D_Y, D_R, n, dn)}.
@@ -173,10 +188,12 @@ def compute_demo_ratios_from_projection(
             ages = ydf["age"].values
             pops = ydf["population"].values
 
+            ret_age = _get_retirement_age(int(year), retirement_schedule)
+
             N_Y  = pops[ages < 20].sum()
             N_M1 = pops[(ages >= 20) & (ages < 45)].sum()
-            N_M2 = pops[(ages >= 45) & (ages < 65)].sum()
-            N_R  = pops[ages >= 65].sum()
+            N_M2 = pops[(ages >= 45) & (ages < ret_age)].sum()
+            N_R  = pops[ages >= ret_age].sum()
             N    = N_Y + N_M1 + N_M2 + N_R
             denom = N_M1 + N_M2 if (N_M1 + N_M2) > 0 else np.nan
 
@@ -594,8 +611,8 @@ def plot_macro_italy(
         "dy":           (-0.10,  0.10),
         "g":            (-0.15,  0.25),
         "pi":           ( 0.00,  0.20),
-        "ir":           ( 0.00,  0.20),
-        "b":            ( 0.00, 10.00),
+        "ir":           ( 0.00,  0.15),
+        "b":            ( 0.00, 5.00),
         "s":            (-0.40,  0.10),
         "s_social":     (-0.30,  0.10),
         "s_non_social": (-0.20,  0.20),
@@ -688,4 +705,95 @@ def plot_macro_italy(
 
     fig.tight_layout()
 
+    return fig
+
+
+def plot_oadr_italy(
+    italy_demo_by_scenario: Dict[str, pd.DataFrame],
+    df_proj: pd.DataFrame,
+    start_year: int = 2010,
+    end_year: int = 2050,
+) -> plt.Figure:
+    """
+    Plot historical + projected Old-Age Dependency Ratio for Italy.
+    OADR = N_R / (N_M1 + N_M2) = D_R, computed deterministically from the
+    demographic projection, so there are no Monte Carlo bands.
+    Each demographic scenario gets its own coloured line.
+    """
+    fig, ax = plt.subplots(figsize=LARGE_FIGSIZE)
+
+    scenarios = list(italy_demo_by_scenario.keys())
+    colors = (SCENARIO_COLORS * 2)[:len(scenarios)]
+
+    hist_col = "D_R_Italy"
+    anchor_val = np.nan
+    y_values: list = []
+
+    if hist_col in df_proj.columns:
+        hist = df_proj[(df_proj["Year"] >= start_year) & (df_proj["Year"] <= 2024)]
+        y_values.extend(hist[hist_col].dropna().values)
+
+        anchor_row = df_proj[df_proj["Year"] == 2024]
+        if len(anchor_row) > 0:
+            anchor_val = float(anchor_row[hist_col].iloc[0])
+
+    proj_slices: Dict[str, pd.DataFrame] = {}
+    for scenario in scenarios:
+        demo = italy_demo_by_scenario[scenario]
+        proj = demo[(demo["year"] >= 2025) & (demo["year"] <= end_year)][["year", "D_R"]].copy()
+
+        if np.isfinite(anchor_val):
+            proj = pd.concat(
+                [pd.DataFrame({"year": [2024], "D_R": [anchor_val]}), proj],
+                ignore_index=True,
+            )
+
+        y_values.extend(proj["D_R"].dropna().values)
+        proj_slices[scenario] = proj
+
+    # Y-axis limits
+    finite_y = [float(v) for v in y_values if np.isfinite(v)]
+    if finite_y:
+        ymin_v = min(finite_y)
+        ymax_v = max(finite_y)
+        pad = 0.05 * (ymax_v - ymin_v) if ymax_v > ymin_v else 0.01
+        ymin_v -= pad
+        ymax_v += pad
+    else:
+        ymin_v, ymax_v = 0.0, 1.0
+
+    # Historical line
+    if hist_col in df_proj.columns:
+        hist = df_proj[(df_proj["Year"] >= start_year) & (df_proj["Year"] <= 2024)]
+        ax.plot(
+            hist["Year"].values,
+            hist[hist_col].values,
+            color="black",
+            linewidth=1.8,
+            label="Historical (Italy)",
+            zorder=5,
+        )
+
+    # Projected lines (one per scenario)
+    for scenario, color in zip(scenarios, colors):
+        proj = proj_slices[scenario]
+        label = scenario.replace("_", " ").title()
+        ax.plot(proj["year"].values, proj["D_R"].values, color=color, linewidth=1.6, label=label)
+
+    ax.axvline(x=2024, color="black", linestyle="--", linewidth=0.9, zorder=4)
+
+    mid_hist = max(start_year, 2010) + (2024 - max(start_year, 2010)) / 2
+    mid_proj = 2024 + (end_year - 2024) / 2
+    ax.text(mid_hist, ymax_v, "Historical", ha="center", va="top", fontsize=9, color="gray")
+    ax.text(mid_proj, ymax_v, "Projected",  ha="center", va="top", fontsize=9, color="gray")
+
+    ax.set_xlabel("Year", fontsize=11)
+    ax.set_ylabel("OADR", fontsize=11)
+    ax.set_title("Italy — Old-Age Dependency Ratio (N_retired / N_working)", fontsize=12)
+    ax.legend(fontsize=9, loc="best")
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(start_year, end_year)
+    ax.set_ylim(ymin_v, ymax_v)
+    ax.tick_params(axis="x", rotation=45)
+    fig.tight_layout()
     return fig

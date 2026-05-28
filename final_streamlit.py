@@ -46,6 +46,7 @@ try:
         compute_demo_ratios_from_projection,
         run_macro_simulations,
         plot_macro_italy,
+        plot_oadr_italy,
         VAR_LABELS,
     )
     _MACRO_AVAILABLE = True
@@ -2333,11 +2334,70 @@ def main() -> None:
                     "Historical data starts from", 1970, 2024, 2010, 5, key="macro_start_year"
                 )
 
+            # ------------------------------------------------------------------
+            # Retirement reform settings
+            # ------------------------------------------------------------------
+            _enable_reforms = st.checkbox(
+                "Enable retirement age reforms",
+                value=False,
+                key="macro_enable_reforms",
+                help=(
+                    "Simulate the effect of raising the statutory retirement age. "
+                    "People who would have retired stay in the working-age group (N_3), "
+                    "shrinking the retired group (N_4) and revising demographic proxies "
+                    "such as D_R, MY, and YM used in the macro model."
+                ),
+            )
+
+            _retirement_schedule: dict | None = None
+            if _enable_reforms:
+                st.markdown(
+                    "<p style='color:#555;font-size:0.88em;margin-bottom:6px'>"
+                    "Current baseline retirement age is <b>65</b>. "
+                    "Reforms take effect at the specified year and persist until the next step.</p>",
+                    unsafe_allow_html=True,
+                )
+                _n_reforms = int(
+                    st.number_input(
+                        "Number of reform steps",
+                        min_value=1, max_value=10, value=3, step=1,
+                        key="macro_n_reforms",
+                    )
+                )
+                _rh_col1, _rh_col2 = st.columns(2)
+                _rh_col1.markdown("**Reform year**")
+                _rh_col2.markdown("**Retirement age**")
+                _retirement_schedule = {}
+                for _ri in range(_n_reforms):
+                    _rc1, _rc2 = st.columns(2)
+                    _reform_yr = int(
+                        _rc1.number_input(
+                            f"Year {_ri + 1}",
+                            min_value=2025, max_value=2074,
+                            value=min(2025 + _ri * 5, 2074),
+                            step=1,
+                            key=f"macro_reform_year_{_ri}",
+                            label_visibility="collapsed",
+                        )
+                    )
+                    _reform_age = int(
+                        _rc2.number_input(
+                            f"Retirement age {_ri + 1}",
+                            min_value=60, max_value=85,
+                            value=min(67 + _ri * 2, 85),
+                            step=1,
+                            key=f"macro_reform_age_{_ri}",
+                            label_visibility="collapsed",
+                        )
+                    )
+                    _retirement_schedule[_reform_yr] = _reform_age
+
             if st.button("Run Macroeconomic Simulations"):
                 with st.spinner("Running 6-country simulation (~10–30 s)…"):
                     try:
                         _italy_demo = compute_demo_ratios_from_projection(
-                            results["population_by_age_mean"]
+                            results["population_by_age_mean"],
+                            retirement_schedule=_retirement_schedule,
                         )
                         _macro_results = run_macro_simulations(
                             _df_proj_macro,
@@ -2347,6 +2407,7 @@ def main() -> None:
                         )
                         st.session_state["macro_results"] = _macro_results
                         st.session_state["macro_df_proj"] = _df_proj_macro
+                        st.session_state["macro_italy_demo"] = _italy_demo
                     except Exception as _exc:
                         st.error(f"Simulation failed: {_exc}")
 
@@ -2379,6 +2440,16 @@ def main() -> None:
                         end_year=_end_year_macro,
                     )
                     st.pyplot(_fig, clear_figure=True)
+
+                if "macro_italy_demo" in st.session_state:
+                    st.subheader("Old-Age Dependency Ratio (OADR)")
+                    _fig_oadr = plot_oadr_italy(
+                        st.session_state["macro_italy_demo"],
+                        _dp,
+                        start_year=_start_year_macro,
+                        end_year=_end_year_macro,
+                    )
+                    st.pyplot(_fig_oadr, clear_figure=True)
 
 
 if __name__ == "__main__":
